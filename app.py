@@ -7,6 +7,8 @@ from groq import Groq
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 st.set_page_config(page_title="Chat with your PDF", page_icon="📄")
 st.title("📄 Chat with your PDF")
 st.caption("Upload a PDF and ask questions about its content.")
@@ -43,19 +45,25 @@ def extract_pages(pdf_path):
             pages.append({"page": page_number, "text": text.strip()})
     return pages
 
-def create_chunks(pages, chunk_size=180, overlap=40):
-    if overlap >= chunk_size:
-        raise ValueError("overlap must be smaller than chunk_size")
-    chunks = []
-    step = chunk_size - overlap
-    for page in pages:
-        words = page["text"].split()
-        for start in range(0, len(words), step):
-            chunk_words = words[start:start + chunk_size]
-            if len(chunk_words) >= 30:
-                chunks.append({"page": page["page"], "text": " ".join(chunk_words)})
-    return chunks
+def create_chunks(pages, chunk_size=1000, overlap=150):
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
 
+    chunks = []
+
+    for page in pages:
+        split_texts = splitter.split_text(page["text"])
+
+        for text in split_texts:
+            chunks.append({
+                "page": page["page"],
+                "text": text,
+            })
+
+    return chunks
 def create_faiss_index(chunks):
     texts = [chunk["text"] for chunk in chunks]
     embeddings = embedding_model.encode(
